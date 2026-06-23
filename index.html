@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aphelion Lander — Lunar Operations</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;background:#05070b;color:#c8cdd6;font-family:'Consolas','Courier New',monospace;overflow:hidden;user-select:none}
+#topbar{position:fixed;top:0;left:0;right:0;height:46px;background:rgba(10,13,20,.92);border-bottom:1px solid #1f2733;display:flex;align-items:center;gap:10px;padding:0 14px;z-index:5;font-size:12px;letter-spacing:1px}
+#topbar strong{color:#e0e6f0;letter-spacing:2px}
+.tab{background:#10151e;color:#8a93a3;border:1px solid #283244;padding:6px 12px;border-radius:3px;cursor:pointer;font-family:inherit;font-size:11px;letter-spacing:1px}
+.tab.active{background:#1e2a3d;color:#dce4f0;border-color:#4a6080}
+.tab:hover{color:#cfd6e2}
+#mission{margin-left:auto;color:#8a93a3;font-size:11px}
+#credits{color:#d4b876;font-weight:700;margin-left:14px}
+canvas{display:block;position:absolute;top:46px;left:0;width:100vw;height:calc(100vh - 46px);background:#02030a}
+#startOverlay{position:fixed;inset:0;background:rgba(2,4,8,.97);z-index:20;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:30px;cursor:pointer}
+#startOverlay h1{font-size:clamp(28px,5vw,52px);letter-spacing:8px;color:#d8e0ee;margin-bottom:14px;font-weight:300}
+#startOverlay p{color:#7c8597;max-width:720px;line-height:1.7;margin:6px 0;font-size:13px}
+#startOverlay .arm{margin-top:24px;padding:14px 28px;border:1px solid #4a6080;background:#15202f;color:#d8e0ee;letter-spacing:3px;font-size:13px}
+.panel{position:absolute;background:rgba(10,13,20,.86);border:1px solid #283244;border-radius:3px;padding:10px 12px;font-size:11px;color:#b4bcca;letter-spacing:.5px;backdrop-filter:blur(4px)}
+.panel h3{font-size:10px;letter-spacing:2px;color:#7a8499;margin-bottom:6px;font-weight:600}
+.panel .row{display:flex;justify-content:space-between;gap:14px;line-height:1.5}
+.panel .v{color:#dce4f0;font-variant-numeric:tabular-nums}
+.bar{height:6px;background:#1a212e;border:1px solid #2a3343;margin-top:3px;border-radius:1px;overflow:hidden}
+.bar>div{height:100%;background:linear-gradient(90deg,#5a8fb8,#7eb4d8)}
+.bar.fuel>div{background:linear-gradient(90deg,#8ba968,#b4c97e)}
+.bar.fuel.low>div{background:linear-gradient(90deg,#a85858,#c87878)}
+.bar.thr>div{background:linear-gradient(90deg,#b88c4a,#d4a868)}
+#hudL{top:60px;left:14px;width:230px}
+#hudR{top:60px;right:14px;width:240px}
+#hudB{bottom:14px;left:50%;transform:translateX(-50%);min-width:520px;text-align:center}
+#hudB .obj{font-size:12px;color:#dce4f0;letter-spacing:1.5px}
+#hudB .sub{font-size:10px;color:#7a8499;margin-top:3px}
+#missionPanel{top:60px;left:260px;width:280px;display:none}
+.missionItem{padding:8px;border:1px solid #2a3343;margin-bottom:6px;cursor:pointer;border-radius:2px;background:#0d121c}
+.missionItem:hover{border-color:#4a6080;background:#141b28}
+.missionItem .t{color:#dce4f0;font-size:11px;letter-spacing:1px}
+.missionItem .d{color:#7a8499;font-size:10px;margin-top:3px;line-height:1.4}
+.missionItem .r{color:#d4b876;font-size:10px;margin-top:4px}
+#shopPanel{top:60px;right:270px;width:280px;display:none;max-height:80vh;overflow-y:auto}
+.upgItem{padding:8px;border:1px solid #2a3343;margin-bottom:6px;border-radius:2px;background:#0d121c}
+.upgItem .t{color:#dce4f0;font-size:11px;display:flex;justify-content:space-between}
+.upgItem .lv{color:#7a8499;font-size:10px;margin-top:2px}
+.upgItem button{margin-top:5px;background:#1e2a3d;color:#dce4f0;border:1px solid #4a6080;padding:4px 10px;font-size:10px;cursor:pointer;border-radius:2px;letter-spacing:1px;font-family:inherit;width:100%}
+.upgItem button:disabled{opacity:.4;cursor:not-allowed}
+.upgItem button:hover:not(:disabled){background:#2a3a52}
+#msg{position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);font-size:28px;letter-spacing:6px;color:#dce4f0;text-align:center;pointer-events:none;text-shadow:0 0 20px rgba(0,0,0,.9);font-weight:300;display:none}
+#msg.crash{color:#d88080}
+#msg.success{color:#a8c878}
+#msg .sub{display:block;font-size:13px;letter-spacing:2px;margin-top:8px;color:#9aa3b3}
+</style>
+</head>
+<body>
+
+<div id="startOverlay">
+  <h1>APHELION</h1>
+  <p>Lunar landing &amp; orbital docking simulator</p>
+  <p style="margin-top:18px;font-size:11px;color:#5d6577">
+    SURFACE — A/D rotate · SPACE main engine · SHIFT/CTRL throttle · R reset<br>
+    ORBITAL — same plus I/J/K/L RCS translation · TAB mission log · U upgrades
+  </p>
+  <div class="arm">⚡ CLICK TO BEGIN ⚡</div>
+</div>
+
+<div id="topbar">
+  <strong>APHELION</strong>
+  <button class="tab active" id="tabSurface">SURFACE</button>
+  <button class="tab" id="tabOrbital">ORBITAL</button>
+  <button class="tab" id="tabMissions">MISSIONS</button>
+  <button class="tab" id="tabShop">UPGRADES</button>
+  <button class="tab" id="tabReset">RESET [R]</button>
+  <span id="mission">No mission selected</span>
+  <span id="credits">◈ 0</span>
+</div>
+
+<canvas id="c"></canvas>
+
+<div class="panel" id="hudL">
+  <h3>FLIGHT</h3>
+  <div class="row"><span>ALT</span><span class="v" id="vAlt">—</span></div>
+  <div class="row"><span>V-SPEED</span><span class="v" id="vVs">—</span></div>
+  <div class="row"><span>H-SPEED</span><span class="v" id="vHs">—</span></div>
+  <div class="row"><span>PITCH</span><span class="v" id="vPit">—</span></div>
+  <div style="margin-top:8px"><span>THROTTLE <span class="v" id="vThr">0%</span></span><div class="bar thr"><div id="bThr" style="width:0%"></div></div></div>
+  <div style="margin-top:6px"><span>FUEL <span class="v" id="vFuel">100%</span></span><div class="bar fuel" id="bFuelW"><div id="bFuel" style="width:100%"></div></div></div>
+</div>
+
+<div class="panel" id="hudR">
+  <h3>SHIP STATUS</h3>
+  <div class="row"><span>ENGINE</span><span class="v" id="vEng">OFF</span></div>
+  <div class="row"><span>GEAR</span><span class="v" id="vGear">UP</span></div>
+  <div class="row"><span>MASS</span><span class="v" id="vMass">—</span></div>
+  <div id="rOrb" style="display:none">
+    <div class="row" style="margin-top:6px"><span>TARGET DIST</span><span class="v" id="vTd">—</span></div>
+    <div class="row"><span>REL VEL</span><span class="v" id="vRv">—</span></div>
+    <div class="row"><span>ALIGN</span><span class="v" id="vAl">—</span></div>
+  </div>
+  <h3 style="margin-top:10px">RECORDS</h3>
+  <div class="row"><span>Landings</span><span class="v" id="vLnd">0</span></div>
+  <div class="row"><span>Dockings</span><span class="v" id="vDk">0</span></div>
+</div>
+
+<div class="panel" id="hudB">
+  <div class="obj" id="objText">Select a mission from the MISSIONS panel</div>
+  <div class="sub" id="objSub">Or fly free — explore the surface, find outposts</div>
+</div>
+
+<div class="panel" id="missionPanel">
+  <h3>AVAILABLE CONTRACTS</h3>
+  <div id="missionList"></div>
+</div>
+
+<div class="panel" id="shopPanel">
+  <h3>UPGRADE BAY</h3>
+  <div id="shopList"></div>
+</div>
+
+<div id="msg"></div>
+
+<script>
+'use strict';
+const C=document.getElementById('c'),X=C.getContext('2d');
+let W=0,H=0;
+function resize(){W=C.width=innerWidth;H=C.height=innerHeight-46;}
+addEventListener('resize',resize);resize();
+
+const SAVE_KEY='aphelion_save_v2';
+const save={credits:0,landings:0,dockings:0,missionsDone:0,upgrades:{thrust:0,efficiency:0,tank:0,gear:0,rcs:0,nav:0},discovered:{}};
+try{Object.assign(save,JSON.parse(localStorage.getItem(SAVE_KEY)||'{}'));save.upgrades=Object.assign({thrust:0,efficiency:0,tank:0,gear:0,rcs:0,nav:0},save.upgrades||{});save.discovered=save.discovered||{};}catch(e){}
+function persist(){localStorage.setItem(SAVE_KEY,JSON.stringify(save));}
+
+let A=null,engOsc=null,engGain=null,engFilt=null,ambGain=null;
+function initAudio(){
+  if(A)return;
+  try{
+    A=new(window.AudioContext||window.webkitAudioContext)();
+    engOsc=A.createOscillator();engOsc.type='sawtooth';engOsc.frequency.value=42;
+    const engOsc2=A.createOscillator();engOsc2.type='square';engOsc2.frequency.value=63;
+    engFilt=A.createBiquadFilter();engFilt.type='lowpass';engFilt.frequency.value=180;engFilt.Q.value=2;
+    engGain=A.createGain();engGain.gain.value=0;
+    engOsc.connect(engFilt);engOsc2.connect(engFilt);engFilt.connect(engGain);engGain.connect(A.destination);
+    engOsc.start();engOsc2.start();
+    const amb=A.createOscillator();amb.type='sine';amb.frequency.value=55;
+    const amb2=A.createOscillator();amb2.type='sine';amb2.frequency.value=82.4;
+    ambGain=A.createGain();ambGain.gain.value=0.012;
+    amb.connect(ambGain);amb2.connect(ambGain);ambGain.connect(A.destination);
+    amb.start();amb2.start();
+  }catch(e){}
+}
+function setEngine(level){
+  if(!engGain)return;
+  engGain.gain.setTargetAtTime(level*0.05,A.currentTime,0.05);
+  engFilt.frequency.setTargetAtTime(120+level*240,A.currentTime,0.05);
+}
+function sfx(type){
+  if(!A)return;
+  const t=A.currentTime;
+  if(type==='crash'){
+    const buf=A.createBuffer(1,A.sampleRate*0.6,A.sampleRate);
+    const d=buf.getChannelData(0);
+    for(let i=0;i<d.length;i++){d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,2);}
+    const src=A.createBufferSource();src.buffer=buf;
+    const f=A.createBiquadFilter();f.type='lowpass';f.frequency.value=380;
+    const g=A.createGain();g.gain.setValueAtTime(0.08,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.55);
+    src.connect(f);f.connect(g);g.connect(A.destination);src.start(t);
+    const o=A.createOscillator();o.type='sine';o.frequency.setValueAtTime(80,t);o.frequency.exponentialRampToValueAtTime(35,t+0.4);
+    const og=A.createGain();og.gain.setValueAtTime(0.06,t);og.gain.exponentialRampToValueAtTime(0.001,t+0.45);
+    o.connect(og);og.connect(A.destination);o.start(t);o.stop(t+0.5);
+  }else if(type==='touch'){
+    const o=A.createOscillator();o.type='sine';o.frequency.value=70;
+    const g=A.createGain();g.gain.setValueAtTime(0.05,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.25);
+    o.connect(g);g.connect(A.destination);o.start(t);o.stop(t+0.3);
+  }else if(type==='dock'){
+    [523,659,784].forEach((f,i)=>{
+      const o=A.createOscillator();o.type='sine';o.frequency.value=f;
+      const g=A.createGain();g.gain.setValueAtTime(0,t+i*0.1);g.gain.linearRampToValueAtTime(0.04,t+i*0.1+0.02);g.gain.exponentialRampToValueAtTime(0.001,t+i*0.1+0.4);
+      o.connect(g);g.connect(A.destination);o.start(t+i*0.1);o.stop(t+i*0.1+0.45);
+    });
+  }else if(type==='success'){
+    [392,523].forEach((f,i)=>{
+      const o=A.createOscillator();o.type='triangle';o.frequency.value=f;
+      const g=A.createGain();g.gain.setValueAtTime(0.04,t+i*0.08);g.gain.exponentialRampToValueAtTime(0.001,t+i*0.08+0.35);
+      o.connect(g);g.connect(A.destination);o.start(t+i*0.08);o.stop(t+i*0.08+0.4);
+    });
+  }else if(type==='rcs'){
+    const buf=A.createBuffer(1,A.sampleRate*0.08,A.sampleRate);
+    const d=buf.getChannelData(0);
+    for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*0.5;
+    const src=A.createBufferSource();src.buffer=buf;
+    const f=A.createBiquadFilter();f.type='highpass';f.frequency.value=1500;
+    const g=A.createGain();g.gain.value=0.025;
+    src.connect(f);f.connect(g);g.connect(A.destination);src.start(t);
+  }else if(type==='ui'){
+    const o=A.createOscillator();o.type='square';o.frequency.value=880;
+    const g=A.createGain();g.gain.setValueAtTime(0.015,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.06);
+    o.connect(g);g.connect(A.destination);o.start(t);o.stop(t+0.08);
+  }
+}
+
+const keys={};
+addEventListener('keydown',e=>{
+  if([' ','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))e.preventDefault();
+  keys[e.key.toLowerCase()]=true;keys[e.key]=true;
+  if(e.key===' '){toggleEngine();}
+  if(e.key.toLowerCase()==='r')resetMode();
+  if(e.key.toLowerCase()==='g')toggleGear();
+  if(e.key==='Tab'){e.preventDefault();togglePanel('missionPanel');}
+  if(e.key.toLowerCase()==='u')togglePanel('shopPanel');
+});
+addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;keys[e.key]=false;});
+
+function hash(n){n=Math.sin(n*127.1+311.7)*43758.5453;return n-Math.floor(n);}
+function noise1(x){const i=Math.floor(x),f=x-i;const u=f*f*(3-2*f);return hash(i)*(1-u)+hash(i+1)*u;}
+function fbm(x){let s=0,a=1,f=1,n=0;for(let i=0;i<6;i++){s+=noise1(x*f)*a;n+=a;a*=0.5;f*=2.1;}return s/n;}
+
+const craters=[];
+for(let i=-30;i<60;i++){
+  const seed=i*97.3;
+  if(hash(seed)>0.35){
+    const x=i*900+hash(seed+1)*600;
+    const r=40+hash(seed+2)*180;
+    const depth=0.3+hash(seed+3)*0.7;
+    craters.push({x,r,depth});
+  }
+}
+const ranges=[];
+for(let i=-10;i<20;i++){
+  if(hash(i*53.1)>0.55){
+    ranges.push({x:i*3000+hash(i*53.2)*1500,w:800+hash(i*53.3)*1200,h:100+hash(i*53.4)*180});
+  }
+}
+
+const BASE_GROUND=620;
+function terrainAt(x){
+  let y=BASE_GROUND;
+  y -= fbm(x*0.0006)*40;
+  y -= (fbm(x*0.003)-0.5)*70;
+  y -= (fbm(x*0.02)-0.5)*12;
+  for(const m of ranges){
+    const d=Math.abs(x-m.x);
+    if(d<m.w){const t=1-d/m.w;y-=m.h*t*t*(3-2*t);}
+  }
+  for(const c of craters){
+    const d=Math.abs(x-c.x);
+    if(d<c.r*1.4){
+      if(d<c.r){
+        const t=d/c.r;
+        const bowl=-Math.sqrt(1-t*t)*c.r*0.35*c.depth;
+        y-=bowl;
+        y+=bowl;
+      }
+      const t=d/c.r;
+      if(t<1){y += (1-t*t)*c.r*0.22*c.depth;}
+      const rimD=Math.abs(d-c.r);
+      if(rimD<c.r*0.25){y -= (1-rimD/(c.r*0.25))*c.r*0.12*c.depth;}
+    }
+  }
+  return y;
+}
+
+const pads=[];
+for(let i=0;i<40;i++){
+  const x=i*1800+400;
+  pads.push({x,y:terrainAt(x),id:i,type:i%4===0?'fuel':i%4===1?'science':i%4===2?'mining':'outpost',name:['ALPHA','BETA','GAMMA','DELTA','EPSILON','ZETA','ETA','THETA','IOTA','KAPPA','LAMBDA','MU','NU','XI','OMICRON','PI','RHO','SIGMA','TAU','UPSILON'][i%20]});
+}
+const origTerrain=terrainAt;
+function terrain(x){
+  for(const p of pads){
+    const d=Math.abs(x-p.x);
+    if(d<60)return p.y;
+    if(d<110){const t=(d-60)/50;return p.y*(1-t)+origTerrain(x)*t;}
+  }
+  return origTerrain(x);
+}
+pads.forEach(p=>{p.y=origTerrain(p.x);});
+
+const stars=[];
+for(let i=0;i<400;i++)stars.push({x:Math.random()*8000-2000,y:Math.random()*1200-600,r:Math.random()*1.3+0.2,a:Math.random()*.7+.3,tw:Math.random()*Math.PI*2});
+const earth={x:1200,y:120,r:55};
+
+const baseShip=()=>({
+  x:pads[0].x,y:pads[0].y-200,vx:0,vy:0,
+  angle:-Math.PI/2,av:0,
+  throttle:50,engineOn:false,
+  fuel:100,maxFuel:100,
+  mass:8,
+  gearDown:true,
+  legL:0,legR:0,
+  landed:false,dead:false,docked:false,timer:0,
+  cargo:null,
+  rcsActive:{u:0,d:0,l:0,r:0},
+});
+let ship=baseShip();
+
+const station={x:1500,y:200,vx:0,vy:0,angle:0,rot:0.003};
+
+const cam={x:0,y:0,zoom:1,tx:0,ty:0,tz:1};
+
+const parts=[];
+function emit(p){parts.push(p);}
+
+let mode='surface';
+let landingsThisRun=0,dockingsThisRun=0;
+let currentMission=null;
+let missionPool=[];
+let msgTimer=0;
+
+const UPGRADES=[
+  {key:'thrust',name:'Engine Thrust',desc:'+15% main thrust per level',max:5,baseCost:400},
+  {key:'efficiency',name:'Fuel Efficiency',desc:'-12% fuel use per level',max:5,baseCost:500},
+  {key:'tank',name:'Fuel Tank',desc:'+25% fuel capacity per level',max:5,baseCost:350},
+  {key:'gear',name:'Landing Gear',desc:'Stronger suspension, higher impact tolerance',max:4,baseCost:600},
+  {key:'rcs',name:'RCS Authority',desc:'+20% RCS thrust per level',max:4,baseCost:450},
+  {key:'nav',name:'Nav Computer',desc:'Better alignment indicators',max:3,baseCost:700},
+];
+function upgCost(u){return Math.floor(u.baseCost*Math.pow(1.6,save.upgrades[u.key]));}
+function stat(){
+  const u=save.upgrades;
+  return {
+    thrust: 0.22*(1+u.thrust*0.15),
+    fuelUse: 0.18*(1-u.efficiency*0.12),
+    maxFuel: 100*(1+u.tank*0.25),
+    landMaxV: 1.6+u.gear*0.4,
+    landMaxH: 0.9+u.gear*0.25,
+    landMaxA: 0.22+u.gear*0.05,
+    rcs: 0.022*(1+u.rcs*0.2),
+    navAssist: u.nav,
+  };
+}
+
+const MISSION_TYPES=[
+  {type:'cargo',name:'Cargo Run',gen:()=>{const a=pads[2+Math.floor(Math.random()*8)],b=pads[2+Math.floor(Math.random()*8)];if(a===b)return null;return{type:'cargo',name:'Cargo Run',from:a,to:b,reward:300+Math.floor(Math.random()*200),desc:`Pick up cargo at ${a.name}, deliver to ${b.name}.`,stage:'pickup'};}},
+  {type:'science',name:'Science Survey',gen:()=>{const a=pads.filter(p=>p.type==='science')[Math.floor(Math.random()*8)];if(!a)return null;return{type:'science',name:'Science Survey',to:a,reward:400+Math.floor(Math.random()*250),desc:`Land at ${a.name} research station, collect data.`,stage:'travel'};}},
+  {type:'mining',name:'Mining Haul',gen:()=>{const a=pads.filter(p=>p.type==='mining')[Math.floor(Math.random()*8)];const b=pads.filter(p=>p.type==='fuel'||p.type==='outpost')[Math.floor(Math.random()*8)];if(!a||!b||a===b)return null;return{type:'mining',name:'Mining Haul',from:a,to:b,reward:550+Math.floor(Math.random()*300),desc:`Extract ore at ${a.name}, deliver to ${b.name}.`,stage:'pickup'};}},
+  {type:'rescue',name:'Rescue Op',gen:()=>{const a=pads[5+Math.floor(Math.random()*15)];return{type:'rescue',name:'Rescue Op',to:a,reward:700+Math.floor(Math.random()*400),desc:`Stranded crew at ${a.name}. Bring them home.`,stage:'travel'};}},
+  {type:'survey',name:'Survey Flight',gen:()=>{const a=pads[8+Math.floor(Math.random()*10)];return{type:'survey',name:'Survey Flight',to:a,reward:350+Math.floor(Math.random()*200),desc:`Map the region around ${a.name}.`,stage:'travel'};}},
+  {type:'dock',name:'Orbital Delivery',gen:()=>({type:'dock',name:'Orbital Delivery',reward:800+Math.floor(Math.random()*400),desc:`Dock with orbital station and transfer cargo.`,stage:'dock'})},
+];
+function generateMissions(){
+  missionPool=[];
+  for(let i=0;i<5;i++){
+    const t=MISSION_TYPES[Math.floor(Math.random()*MISSION_TYPES.length)];
+    const m=t.gen();if(m)missionPool.push(m);
+  }
+  renderMissions();
+}
+function renderMissions(){
+  const el=document.getElementById('missionList');
+  el.innerHTML=missionPool.map((m,i)=>`<div class="missionItem" data-i="${i}"><div class="t">${m.name}</div><div class="d">${m.desc}</div><div class="r">◈ ${m.reward}</div></div>`).join('');
+  el.querySelectorAll('.missionItem').forEach(e=>e.onclick=()=>{
+    currentMission=missionPool[+e.dataset.i];missionPool.splice(+e.dataset.i,1);
+    if(currentMission.type==='dock'){if(mode!=='orbital')switchMode('orbital');}
+    else if(mode!=='surface')switchMode('surface');
+    renderMissions();updateMissionUI();sfx('ui');
+  });
+}
+function updateMissionUI(){
+  const m=currentMission;
+  document.getElementById('mission').textContent=m?`MISSION: ${m.name}`:'No mission selected';
+  if(!m){document.getElementById('objText').textContent='Select a mission from the MISSIONS panel';document.getElementById('objSub').textContent='Or fly free — explore the surface, find outposts';return;}
+  let t='',s='';
+  if(m.type==='cargo'||m.type==='mining'){
+    if(m.stage==='pickup'){t=`Land at ${m.from.name} to pick up cargo`;s=`Reward: ◈${m.reward}`;}
+    else{t=`Deliver to ${m.to.name}`;s=`Reward: ◈${m.reward}`;}
+  } else if(m.type==='science'){t=`Land at ${m.to.name} research station`;s=`Reward: ◈${m.reward}`;}
+  else if(m.type==='rescue'){t=`Reach stranded crew at ${m.to.name}`;s=`Reward: ◈${m.reward}`;}
+  else if(m.type==='survey'){t=`Survey ${m.to.name} region (fly within 200m)`;s=`Reward: ◈${m.reward}`;}
+  else if(m.type==='dock'){t='Dock with orbital station';s=`Match velocity (<0.4) and alignment (<10°). Reward: ◈${m.reward}`;}
+  document.getElementById('objText').textContent=t;document.getElementById('objSub').textContent=s;
+}
+
+function renderShop(){
+  const el=document.getElementById('shopList');
+  el.innerHTML=UPGRADES.map(u=>{
+    const lv=save.upgrades[u.key],maxed=lv>=u.max,cost=upgCost(u),can=!maxed&&save.credits>=cost;
+    return `<div class="upgItem"><div class="t"><span>${u.name}</span><span>LV ${lv}/${u.max}</span></div><div class="lv">${u.desc}</div><button data-k="${u.key}" ${maxed?'disabled':''} ${!can&&!maxed?'disabled':''}>${maxed?'MAXED':`◈ ${cost}`}</button></div>`;
+  }).join('');
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    const u=UPGRADES.find(x=>x.key===b.dataset.k),c=upgCost(u);
+    if(save.credits>=c&&save.upgrades[u.key]<u.max){save.credits-=c;save.upgrades[u.key]++;persist();renderShop();updateHUD();sfx('success');}
+  });
+}
+
+function switchMode(m){
+  mode=m;
+  document.getElementById('tabSurface').classList.toggle('active',m==='surface');
+  document.getElementById('tabOrbital').classList.toggle('active',m==='orbital');
+  document.getElementById('rOrb').style.display=m==='orbital'?'block':'none';
+  resetMode();
+}
+function resetMode(){
+  const s=stat();
+  ship=baseShip();ship.maxFuel=s.maxFuel;ship.fuel=s.maxFuel;
+  parts.length=0;
+  if(mode==='surface'){
+    const startPad=currentMission&&currentMission.from?currentMission.from:pads[0];
+    ship.x=startPad.x;
+    const gy=terrain(ship.x);
+    ship.y=gy-36;
+    ship.vx=0;ship.vy=0;ship.av=0;
+    ship.angle=-Math.PI/2;
+    ship.landed=true;ship.gearDown=true;
+    ship.legL=ship.legR=0.5;
+    cam.x=ship.x;cam.y=ship.y-100;cam.zoom=0.8;
+  } else {
+    ship.x=400;ship.y=400;ship.vx=0.15;ship.vy=0;ship.angle=0;ship.landed=false;
+    station.x=1200;station.y=380;station.vx=0;station.vy=0;
+    cam.x=800;cam.y=380;cam.zoom=0.7;
+  }
+}
+
+function togglePanel(id){
+  const el=document.getElementById(id);
+  el.style.display=el.style.display==='block'?'none':'block';
+  sfx('ui');
+}
+function toggleEngine(){if(!ship.dead&&!ship.docked)ship.engineOn=!ship.engineOn;}
+function toggleGear(){ship.gearDown=!ship.gearDown;}
+
+document.getElementById('tabSurface').onclick=()=>{switchMode('surface');sfx('ui');};
+document.getElementById('tabOrbital').onclick=()=>{switchMode('orbital');sfx('ui');};
+document.getElementById('tabMissions').onclick=()=>togglePanel('missionPanel');
+document.getElementById('tabShop').onclick=()=>togglePanel('shopPanel');
+document.getElementById('tabReset').onclick=()=>{resetMode();sfx('ui');};
+
+document.getElementById('startOverlay').onclick=function(){
+  initAudio();if(A&&A.state==='suspended')A.resume();
+  this.style.display='none';
+  generateMissions();renderShop();updateMissionUI();updateHUD();
+  loop();
+};
+
+const G=0.045;
+function physics(){
+  if(ship.dead){ship.timer--;if(ship.timer<=0){resetMode();}return;}
+  if(ship.docked){
+    ship.timer--;
+    ship.fuel=Math.min(ship.maxFuel,ship.fuel+0.4);
+    if(ship.timer<=0){ship.docked=false;ship.x-=160;ship.vx=-0.05;}
+    return;
+  }
+  const s=stat();
+
+  let rotInput=0;
+  if(keys.a||keys.arrowleft)rotInput-=1;
+  if(keys.d||keys.arrowright)rotInput+=1;
+  ship.av+=rotInput*0.0018;
+  ship.av*=0.93;
+  ship.angle+=ship.av;
+
+  if(keys.shift)ship.throttle=Math.min(100,ship.throttle+1.5);
+  if(keys.control)ship.throttle=Math.max(0,ship.throttle-1.5);
+
+  let engineLevel=0;
+  if(ship.engineOn&&ship.fuel>0&&ship.throttle>0){
+    const t=s.thrust*(ship.throttle/100);
+    ship.vx+=Math.cos(ship.angle)*t;
+    ship.vy+=Math.sin(ship.angle)*t;
+    ship.fuel=Math.max(0,ship.fuel-s.fuelUse*(ship.throttle/100));
+    engineLevel=ship.throttle/100;
+    if(Math.random()<0.7){
+      const px=ship.x-Math.cos(ship.angle)*22,py=ship.y-Math.sin(ship.angle)*22;
+      const sp=2.5+Math.random()*2;
+      emit({x:px,y:py,vx:-Math.cos(ship.angle)*sp+ship.vx*0.6+(Math.random()-0.5)*0.6,vy:-Math.sin(ship.angle)*sp+ship.vy*0.6+(Math.random()-0.5)*0.6,life:18+Math.random()*10,r:2+Math.random()*2,c:'plume'});
+    }
+  }
+  if(ship.fuel<=0)ship.engineOn=false;
+  setEngine(engineLevel);
+
+  const rcs=s.rcs;
+  if(ship.fuel>0){
+    if(keys.i||keys.arrowup){ship.vy-=rcs;ship.fuel-=s.fuelUse*0.1;if(Math.random()<0.3)sfx('rcs');emitRCS('top');}
+    if(keys.k||keys.arrowdown){ship.vy+=rcs;ship.fuel-=s.fuelUse*0.1;if(Math.random()<0.3)sfx('rcs');emitRCS('bot');}
+    if(keys.j){ship.vx-=rcs;ship.fuel-=s.fuelUse*0.1;if(Math.random()<0.3)sfx('rcs');emitRCS('right');}
+    if(keys.l){ship.vx+=rcs;ship.fuel-=s.fuelUse*0.1;if(Math.random()<0.3)sfx('rcs');emitRCS('left');}
+  }
+  ship.fuel=Math.max(0,ship.fuel);
+
+  if(mode==='surface'){
+    ship.vy+=G;
+    ship.vx*=0.9995;ship.vy*=0.9995;
+  } else {
+    ship.vx*=0.9998;ship.vy*=0.9998;
+  }
+
+  ship.x+=ship.vx;ship.y+=ship.vy;
+
+  if(ship.landed){
+    ship.vx=0;ship.vy=0;ship.av=0;
+    const pad=nearestPad(ship.x);
+    if(pad&&Math.abs(ship.x-pad.x)<50&&(pad.type==='fuel'||pad.type==='outpost')){
+      ship.fuel=Math.min(ship.maxFuel,ship.fuel+0.5);
+    }
+    ship.legL=Math.max(0.15,ship.legL*0.9);
+    ship.legR=Math.max(0.15,ship.legR*0.9);
+    if(ship.engineOn&&ship.fuel>5){
+      ship.landed=false;
+    }
+  } else if(mode==='surface'){
+    const gy=terrain(ship.x),foot=ship.y+36;
+    if(foot>=gy){
+      const upAngle=ship.angle+Math.PI/2;
+      const ae=Math.abs(Math.atan2(Math.sin(upAngle),Math.cos(upAngle)));
+      const safe=ship.gearDown&&Math.abs(ship.vy)<s.landMaxV&&Math.abs(ship.vx)<s.landMaxH&&ae<s.landMaxA;
+      ship.y=gy-36;
+      if(safe){
+        ship.legL=Math.min(1,Math.abs(ship.vy)/2+0.3);
+        ship.legR=ship.legL;
+        ship.vx=0;ship.vy=0;ship.av=0;
+        ship.landed=true;ship.engineOn=false;
+        ship.angle=-Math.PI/2;
+        landingsThisRun++;save.landings++;
+        sfx('touch');
+        for(let i=0;i<20;i++)emit({x:ship.x+(Math.random()-0.5)*40,y:gy,vx:(Math.random()-0.5)*3,vy:-Math.random()*1.5,life:40+Math.random()*30,r:2+Math.random()*2,c:'dust'});
+        checkMissionLand();
+        persist();
+      } else {
+        ship.dead=true;ship.timer=140;ship.engineOn=false;
+        sfx('crash');
+        for(let i=0;i<40;i++){const a=Math.random()*Math.PI*2,sp=1+Math.random()*4;emit({x:ship.x,y:ship.y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-1,life:60+Math.random()*40,r:1.5+Math.random()*2.5,c:Math.random()<0.6?'debris':'dust'});}
+        showMsg('CRASH','Impact too hard or off-pad','crash');
+      }
+    }
+  } else {
+    station.angle+=station.rot;
+    const port={x:station.x-95,y:station.y};
+    const dx=ship.x-port.x,dy=ship.y-port.y,d=Math.hypot(dx,dy);
+    const rv=Math.hypot(ship.vx-station.vx,ship.vy-station.vy);
+    const ae=Math.abs(Math.atan2(Math.sin(ship.angle),Math.cos(ship.angle)));
+    if(d<22){
+      if(rv<0.4&&ae<0.18){
+        ship.docked=true;ship.timer=180;ship.engineOn=false;
+        ship.x=port.x;ship.y=port.y;ship.vx=ship.vy=ship.av=0;ship.angle=0;
+        dockingsThisRun++;save.dockings++;
+        sfx('dock');
+        showMsg('DOCKED','Cargo transferring...','success');
+        if(currentMission&&currentMission.type==='dock'){completeMission();}
+        persist();
+      } else {
+        ship.dead=true;ship.timer=140;sfx('crash');
+        for(let i=0;i<30;i++){const a=Math.random()*Math.PI*2,sp=1+Math.random()*3;emit({x:ship.x,y:ship.y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:50,r:2,c:'debris'});}
+        showMsg('COLLISION','Match velocity and alignment','crash');
+      }
+    }
+    if(ship.x<-200||ship.x>2500||ship.y<-300||ship.y>900){
+      ship.x=Math.max(-200,Math.min(2500,ship.x));ship.y=Math.max(-300,Math.min(900,ship.y));
+      ship.vx*=-0.3;ship.vy*=-0.3;
+    }
+  }
+
+  if(currentMission&&currentMission.type==='survey'&&Math.abs(ship.x-currentMission.to.x)<200){
+    completeMission();
+  }
+}
+
+function emitRCS(side){
+  let dx=0,dy=0;
+  const ca=Math.cos(ship.angle),sa=Math.sin(ship.angle);
+  const ux=-sa,uy=ca;
+  if(side==='top'){dx=ux*-12;dy=uy*-12;}
+  if(side==='bot'){dx=ux*12;dy=uy*12;}
+  if(side==='left'){dx=ca*-12;dy=sa*-12;}
+  if(side==='right'){dx=ca*12;dy=sa*12;}
+  emit({x:ship.x+dx,y:ship.y+dy,vx:dx*0.15+(Math.random()-0.5)*.5,vy:dy*0.15+(Math.random()-0.5)*.5,life:12,r:1.5,c:'rcs'});
+}
+
+function nearestPad(x){let best=null,bd=Infinity;for(const p of pads){const d=Math.abs(p.x-x);if(d<bd){bd=d;best=p;}}return best;}
+
+function checkMissionLand(){
+  if(!currentMission)return;
+  const pad=nearestPad(ship.x);
+  if(!pad||Math.abs(ship.x-pad.x)>60)return;
+  const m=currentMission;
+  if(m.type==='cargo'||m.type==='mining'){
+    if(m.stage==='pickup'&&pad===m.from){m.stage='deliver';ship.cargo=m.type;updateMissionUI();showMsg('CARGO LOADED','Deliver to '+m.to.name,'success');sfx('success');}
+    else if(m.stage==='deliver'&&pad===m.to){completeMission();}
+  } else if((m.type==='science'||m.type==='rescue')&&pad===m.to){
+    completeMission();
+  }
+}
+function completeMission(){
+  if(!currentMission)return;
+  save.credits+=currentMission.reward;save.missionsDone++;
+  showMsg('MISSION COMPLETE','+◈ '+currentMission.reward,'success');
+  sfx('success');
+  currentMission=null;ship.cargo=null;
+  updateMissionUI();updateHUD();persist();
+  if(missionPool.length<3)generateMissions();else renderMissions();
+}
+
+function showMsg(t,sub,cls){
+  const m=document.getElementById('msg');
+  m.innerHTML=t+(sub?`<span class="sub">${sub}</span>`:'');
+  m.className=cls||'';m.style.display='block';msgTimer=120;
+}
+
+function updateCamera(){
+  cam.tx=ship.x+ship.vx*15;
+  cam.ty=ship.y+ship.vy*15;
+  if(mode==='surface'){
+    const gy=terrain(ship.x),alt=Math.max(0,gy-ship.y);
+    const sp=Math.hypot(ship.vx,ship.vy);
+    let z=1.0;
+    if(alt>250||sp>3)z=0.55;
+    else if(alt>120||sp>1.5)z=0.75;
+    else if(alt<50)z=1.1;
+    cam.tz=z;
+    cam.ty=Math.min(cam.ty,gy-80);
+  } else {
+    cam.tx=(ship.x+station.x)/2;
+    cam.ty=(ship.y+station.y)/2;
+    const d=Math.hypot(ship.x-station.x,ship.y-station.y);
+    cam.tz=Math.max(0.5,Math.min(1.0,400/d));
+  }
+  cam.x+=(cam.tx-cam.x)*0.08;
+  cam.y+=(cam.ty-cam.y)*0.08;
+  cam.zoom+=(cam.tz-cam.zoom)*0.05;
+}
+
+function bg(){
+  const g=X.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#03050a');g.addColorStop(0.6,'#06080f');g.addColorStop(1,'#0a0d16');
+  X.fillStyle=g;X.fillRect(0,0,W,H);
+  for(const s of stars){
+    s.tw+=0.02;
+    const px=(s.x-cam.x*0.05)*0.6+W/2,py=(s.y-cam.y*0.05)*0.6+H/2;
+    if(px<-5||px>W+5||py<-5||py>H+5)continue;
+    X.fillStyle=`rgba(220,230,245,${s.a*(0.7+Math.sin(s.tw)*0.3)})`;
+    X.fillRect(px,py,s.r,s.r);
+  }
+  if(mode==='orbital'){
+    drawEarth(W*0.78,H*0.22,60);
+  } else {
+    drawEarth(W*0.85-cam.x*0.02,80,40);
+  }
+}
+function drawEarth(x,y,r){
+  const g=X.createRadialGradient(x-r*0.3,y-r*0.3,r*0.2,x,y,r);
+  g.addColorStop(0,'#3a6ba8');g.addColorStop(0.5,'#1f3d6a');g.addColorStop(0.85,'#0e2040');g.addColorStop(1,'#050a18');
+  X.fillStyle=g;X.beginPath();X.arc(x,y,r,0,Math.PI*2);X.fill();
+  X.strokeStyle='rgba(120,160,220,0.15)';X.lineWidth=2;X.stroke();
+  X.fillStyle='rgba(0,0,0,0.55)';X.beginPath();X.arc(x+r*0.35,y,r*0.95,0,Math.PI*2);X.fill();
+}
+
+function worldToScreen(wx,wy){return [(wx-cam.x)*cam.zoom+W/2,(wy-cam.y)*cam.zoom+H/2];}
+
+function drawTerrain(){
+  for(let layer=0;layer<3;layer++){
+    const par=0.3+layer*0.2;
+    const shade=['#0d121c','#141a26','#1a2230'][layer];
+    X.fillStyle=shade;
+    X.beginPath();
+    const yOff=[180,120,60][layer];
+    const startX=cam.x*par-W/cam.zoom;
+    X.moveTo(-50,H+50);
+    for(let sx=-50;sx<W+50;sx+=18){
+      const wx=(sx-W/2)/cam.zoom+cam.x*par;
+      const y= H*0.55 - yOff + fbm(wx*0.0008+layer*3.7)*120 + (fbm(wx*0.003+layer)-0.5)*40;
+      X.lineTo(sx,y);
+    }
+    X.lineTo(W+50,H+50);X.closePath();X.fill();
+  }
+  const left=cam.x-W/cam.zoom/2-50,right=cam.x+W/cam.zoom/2+50;
+  const step=Math.max(2,4/cam.zoom);
+  X.beginPath();
+  const [sx0,sy0]=worldToScreen(left,terrain(left));
+  X.moveTo(sx0,H+50);X.lineTo(sx0,sy0);
+  for(let x=left;x<right;x+=step){
+    const [sx,sy]=worldToScreen(x,terrain(x));
+    X.lineTo(sx,sy);
+  }
+  const [sxN,syN]=worldToScreen(right,terrain(right));
+  X.lineTo(sxN,H+50);X.closePath();
+  const gg=X.createLinearGradient(0,H*0.5,0,H);
+  gg.addColorStop(0,'#5a5d65');gg.addColorStop(0.3,'#3e4148');gg.addColorStop(0.7,'#2a2d33');gg.addColorStop(1,'#161820');
+  X.fillStyle=gg;X.fill();
+  X.strokeStyle='rgba(180,185,195,0.35)';X.lineWidth=1.2;
+  X.beginPath();
+  let first=true;
+  for(let x=left;x<right;x+=step){
+    const [sx,sy]=worldToScreen(x,terrain(x));
+    if(first){X.moveTo(sx,sy);first=false;}else X.lineTo(sx,sy);
+  }
+  X.stroke();
+
+  for(const p of pads){
+    if(p.x<left-200||p.x>right+200)continue;
+    const [px,py]=worldToScreen(p.x,p.y);
+    const pw=70*cam.zoom;
+    X.fillStyle='#2a2f3a';X.fillRect(px-pw,py-3,pw*2,6);
+    X.strokeStyle='#6a7388';X.lineWidth=1;X.strokeRect(px-pw,py-3,pw*2,6);
+    const col={fuel:'#d4a868',science:'#7eb4d8',mining:'#c87878',outpost:'#a8c878'}[p.type];
+    X.fillStyle=col;X.fillRect(px-pw,py-4,pw*2,2);
+    if(cam.zoom>0.5){
+      X.fillStyle='#9aa3b3';X.font='10px Consolas';X.textAlign='center';
+      X.fillText(p.name+' · '+p.type.toUpperCase(),px,py-12);
+    }
+    const blink=(Date.now()/300+p.id)%2<1;
+    if(blink){X.fillStyle=col;X.beginPath();X.arc(px,py-8,2,0,Math.PI*2);X.fill();}
+    if(currentMission){
+      const target=(currentMission.stage==='pickup'?currentMission.from:currentMission.to);
+      if(p===target){
+        X.strokeStyle='#d4b876';X.lineWidth=2;X.setLineDash([4,3]);
+        X.strokeRect(px-pw-4,py-20,pw*2+8,28);X.setLineDash([]);
+      }
+    }
+  }
+}
+
+function drawLander(){
+  if(ship.dead)return;
+  const [sx,sy]=worldToScreen(ship.x,ship.y);
+  X.save();X.translate(sx,sy);X.scale(cam.zoom,cam.zoom);X.rotate(ship.angle+Math.PI/2);
+
+  if(ship.engineOn&&ship.fuel>0){
+    const fl=15+ship.throttle*0.3+Math.random()*8;
+    const w=8;
+    const grd=X.createLinearGradient(0,28,0,28+fl);
+    grd.addColorStop(0,'rgba(255,200,120,0.9)');grd.addColorStop(0.4,'rgba(255,150,80,0.6)');grd.addColorStop(1,'rgba(255,80,40,0)');
+    X.fillStyle=grd;X.beginPath();X.moveTo(-w,28);X.lineTo(0,28+fl);X.lineTo(w,28);X.closePath();X.fill();
+    X.fillStyle='rgba(180,220,255,0.7)';X.beginPath();X.moveTo(-3,28);X.lineTo(0,28+fl*0.4);X.lineTo(3,28);X.closePath();X.fill();
+  }
+
+  if(ship.gearDown){
+    X.strokeStyle='#8a93a3';X.lineWidth=1.5;X.fillStyle='#3a4050';
+    for(const side of [-1,1]){
+      const comp=(side<0?ship.legL:ship.legR);
+      const legY=22-comp*4;
+      X.beginPath();X.moveTo(side*8,8);X.lineTo(side*22,legY);X.stroke();
+      X.beginPath();X.moveTo(side*4,18);X.lineTo(side*22,legY);X.stroke();
+      X.fillStyle='#4a5060';X.beginPath();X.ellipse(side*22,legY+2,7,2.5,0,0,Math.PI*2);X.fill();
+      X.strokeRect(side*22-7,legY,14,1);
+    }
+  }
+
+  X.fillStyle='#9aa0ad';X.strokeStyle='#3a3f4a';X.lineWidth=1.5;
+  X.beginPath();
+  X.moveTo(-14,0);X.lineTo(-18,6);X.lineTo(-18,18);X.lineTo(-14,22);
+  X.lineTo(14,22);X.lineTo(18,18);X.lineTo(18,6);X.lineTo(14,0);X.closePath();
+  X.fill();X.stroke();
+  X.strokeStyle='#5a606e';X.lineWidth=0.8;
+  X.beginPath();X.moveTo(-14,8);X.lineTo(14,8);X.moveTo(0,0);X.lineTo(0,22);X.stroke();
+  X.fillStyle='#b8954a';X.fillRect(-12,10,8,8);X.fillRect(4,10,8,8);
+  X.strokeStyle='#6a5028';X.strokeRect(-12,10,8,8);X.strokeRect(4,10,8,8);
+
+  X.fillStyle='#2a2d35';X.strokeStyle='#5a606e';
+  X.beginPath();X.moveTo(-6,22);X.lineTo(-8,28);X.lineTo(8,28);X.lineTo(6,22);X.closePath();X.fill();X.stroke();
+  X.fillStyle='#1a1c22';X.fillRect(-7,26,14,2);
+
+  X.fillStyle='#aab0bd';X.strokeStyle='#3a3f4a';X.lineWidth=1.5;
+  X.beginPath();
+  X.moveTo(-10,-12);X.lineTo(-14,-2);X.lineTo(-14,0);X.lineTo(14,0);X.lineTo(14,-2);X.lineTo(10,-12);X.closePath();
+  X.fill();X.stroke();
+  X.fillStyle='#1a2838';X.beginPath();X.moveTo(-6,-9);X.lineTo(-1,-9);X.lineTo(-3,-4);X.closePath();X.fill();
+  X.beginPath();X.moveTo(1,-9);X.lineTo(6,-9);X.lineTo(3,-4);X.closePath();X.fill();
+  X.strokeStyle='#5a606e';X.lineWidth=0.6;X.stroke();
+
+  X.fillStyle='#7a8090';X.fillRect(-5,-14,10,3);X.strokeRect(-5,-14,10,3);
+  X.strokeStyle='#8a93a3';X.lineWidth=1;X.beginPath();X.moveTo(8,-12);X.lineTo(12,-20);X.stroke();
+  X.fillStyle='#aab0bd';X.beginPath();X.arc(12,-20,1.5,0,Math.PI*2);X.fill();
+
+  X.fillStyle='#5a606e';
+  X.fillRect(-15,-3,2,2);X.fillRect(13,-3,2,2);
+
+  const blink=Math.floor(Date.now()/500)%2;
+  if(blink){X.fillStyle='#ff5050';X.beginPath();X.arc(-14,-1,1.2,0,Math.PI*2);X.fill();
+    X.fillStyle='#50ff50';X.beginPath();X.arc(14,-1,1.2,0,Math.PI*2);X.fill();}
+
+  X.restore();
+}
+
+function drawStation(){
+  const [sx,sy]=worldToScreen(station.x,station.y);
+  X.save();X.translate(sx,sy);X.scale(cam.zoom,cam.zoom);
+  X.fillStyle='#8a909d';X.strokeStyle='#3a3f4a';X.lineWidth=1.5;
+  X.fillRect(-30,-18,60,36);X.strokeRect(-30,-18,60,36);
+  X.fillStyle='#5a606e';X.fillRect(-50,-3,40,6);X.strokeRect(-50,-3,40,6);
+  X.fillRect(30,-3,40,6);X.strokeRect(30,-3,40,6);
+  X.save();X.translate(70,0);X.rotate(station.angle);
+  X.fillStyle='#1a3050';X.fillRect(-5,-35,40,70);X.strokeRect(-5,-35,40,70);
+  for(let i=-3;i<=3;i++){X.beginPath();X.moveTo(-5,i*10);X.lineTo(35,i*10);X.strokeStyle='#0a1830';X.stroke();}
+  X.restore();
+  X.save();X.translate(-70,0);X.rotate(-station.angle);
+  X.fillStyle='#1a3050';X.fillRect(-35,-35,40,70);X.strokeStyle='#3a3f4a';X.strokeRect(-35,-35,40,70);
+  for(let i=-3;i<=3;i++){X.beginPath();X.moveTo(-35,i*10);X.lineTo(5,i*10);X.strokeStyle='#0a1830';X.stroke();}
+  X.restore();
+  X.fillStyle='#3a3f4a';X.fillRect(-38,-8,8,16);X.strokeStyle='#7a8090';X.strokeRect(-38,-8,8,16);
+  X.fillStyle='#d4b876';X.fillRect(-40,-2,2,4);
+  const blink=Math.floor(Date.now()/400)%2;
+  if(blink){X.fillStyle='#50ff50';X.beginPath();X.arc(-40,-8,1.5,0,Math.PI*2);X.fill();
+    X.fillStyle='#50ff50';X.beginPath();X.arc(-40,8,1.5,0,Math.PI*2);X.fill();}
+  X.restore();
+
+  const port={x:station.x-95,y:station.y};
+  const [px,py]=worldToScreen(port.x,port.y);
+  X.strokeStyle='rgba(126,180,216,0.3)';X.lineWidth=1;X.setLineDash([6,4]);
+  X.strokeRect(px-180*cam.zoom,py-40*cam.zoom,180*cam.zoom,80*cam.zoom);
+  X.setLineDash([]);
+  X.strokeStyle='rgba(212,184,118,0.6)';X.lineWidth=1;
+  X.beginPath();X.moveTo(px-10,py);X.lineTo(px+10,py);X.moveTo(px,py-10);X.lineTo(px,py+10);X.stroke();
+  X.beginPath();X.arc(px,py,12,0,Math.PI*2);X.stroke();
+}
+
+function drawParticles(){
+  for(const p of parts){
+    const [px,py]=worldToScreen(p.x,p.y);
+    const a=Math.max(0,p.life/60);
+    if(p.c==='plume'){
+      X.fillStyle=`rgba(255,${160+Math.random()*60},80,${a*0.7})`;
+    } else if(p.c==='dust'){
+      X.fillStyle=`rgba(140,138,132,${a*0.55})`;
+    } else if(p.c==='debris'){
+      X.fillStyle=`rgba(80,85,95,${a*0.8})`;
+    } else if(p.c==='rcs'){
+      X.fillStyle=`rgba(200,220,240,${a*0.6})`;
+    }
+    const r=p.r*cam.zoom;
+    X.fillRect(px-r/2,py-r/2,r,r);
+  }
+}
+function updateParts(){
+  for(let i=parts.length-1;i>=0;i--){
+    const p=parts[i];p.x+=p.vx;p.y+=p.vy;
+    if(p.c==='dust'||p.c==='debris')p.vy+=0.05;
+    if(p.c==='plume'){p.vx*=0.94;p.vy*=0.94;}
+    p.life--;if(p.life<=0)parts.splice(i,1);
+  }
+}
+
+function updateHUD(){
+  const s=stat();
+  const gy=mode==='surface'?terrain(ship.x):0;
+  const alt=mode==='surface'?Math.max(0,gy-ship.y):0;
+  document.getElementById('vAlt').textContent=mode==='surface'?Math.round(alt)+' m':'orbit';
+  document.getElementById('vVs').textContent=(-ship.vy*10).toFixed(1)+' m/s';
+  document.getElementById('vHs').textContent=(ship.vx*10).toFixed(1)+' m/s';
+  const up=ship.angle+Math.PI/2;
+  const ae=Math.atan2(Math.sin(up),Math.cos(up))*57.3;
+  document.getElementById('vPit').textContent=ae.toFixed(0)+'°';
+  document.getElementById('vThr').textContent=Math.round(ship.throttle)+'%';
+  document.getElementById('bThr').style.width=ship.throttle+'%';
+  const fp=ship.fuel/ship.maxFuel*100;
+  document.getElementById('vFuel').textContent=Math.round(fp)+'%';
+  document.getElementById('bFuel').style.width=fp+'%';
+  document.getElementById('bFuelW').classList.toggle('low',fp<25);
+  document.getElementById('vEng').textContent=ship.engineOn?'ON':'OFF';
+  document.getElementById('vGear').textContent=ship.gearDown?'DOWN':'UP';
+  document.getElementById('vMass').textContent=(ship.mass+ship.fuel*0.05).toFixed(1)+' t';
+  document.getElementById('vLnd').textContent=save.landings;
+  document.getElementById('vDk').textContent=save.dockings;
+  document.getElementById('credits').textContent='◈ '+save.credits;
+  if(mode==='orbital'){
+    const port={x:station.x-95,y:station.y};
+    const d=Math.hypot(ship.x-port.x,ship.y-port.y);
+    const rv=Math.hypot(ship.vx,ship.vy);
+    const aeAbs=Math.abs(Math.atan2(Math.sin(ship.angle),Math.cos(ship.angle)))*57.3;
+    document.getElementById('vTd').textContent=Math.round(d)+' m';
+    document.getElementById('vRv').textContent=rv.toFixed(2)+' m/s';
+    document.getElementById('vAl').textContent=aeAbs.toFixed(0)+'°';
+  }
+}
+
+let hudTick=0;
+function loop(){
+  physics();updateParts();updateCamera();
+  bg();
+  if(mode==='surface')drawTerrain(); else drawStation();
+  drawParticles();
+  drawLander();
+  if(++hudTick>3){hudTick=0;updateHUD();}
+  if(msgTimer>0){msgTimer--;if(msgTimer===0)document.getElementById('msg').style.display='none';}
+  requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>
