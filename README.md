@@ -23,7 +23,14 @@ Features I hope to implement in the future
 -> Unique scenarios meant to try to survive
 -> Avatars (for astronauts)
 -> A skin system
-
+# Controls:
+Increase throttle: Left Shift
+Decrease Throttle: LeftCTRL
+Tilt Craft: A/D or LeftArrow/RightArrow
+RCS(up/down/left/right/):I/K/J/L (like wasd but IJKL)
+Rapidly increase throttle to 100: Left click
+Toggle throttle: Spacebar
+Reset: R
 Thats pretty much it! Leave comments to give me some ideas 
 
 ## UPDATE NUMBER 2 AYYAYAYAYYAY
