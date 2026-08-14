@@ -1,4 +1,4 @@
-# WELCOME!
+<img width="710" height="345" alt="image" src="https://github.com/user-attachments/assets/2badde21-2d45-406e-94a3-b484d4e4fe20" /># WELCOME!
 This is Aphelion, a Lunar Lander game which i made myself, completely contained in a single HTML file.
 Current features:
 -> Procedurally infinitely generating Land
@@ -35,4 +35,4 @@ additionally, I removed the docking mode as it was wayyy too buggy
 The files I uploaded in this github repo are basicaly for the dedicated app version, like its in its own window. however, If you just want to run the game or integrate it into ur own web OS , App, or flash it onto a small microcontroller, you can simply download Index.html, bgms.mp3, and lander.png. the rest of the stuff is just to make sure that Your computer doesnt flag it as a virus or anything!
 This project is meant to be played on a Pc/laptop/anything with a widescreen display. Although I attempted to add mobile phone support, it didnt quite work, for which I apologize 
 
-# thank you so much :)) enjoy
+# thank you so much :)) play the game at https://qarzan2012.itch.io/aphelion
