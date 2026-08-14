@@ -15,7 +15,8 @@ Features I am currently working on:
 -> Levels to docking, each with a higher level of difficulty
 -> Procedurally generating sattelites for infinite levels of docking
 -> An OST as background music
-
+# reason I made this:
+Chrome dino game is quite boring and I wanted to have some small lightweight to implement in browsers!
 Features I hope to implement in the future
 -> Building your own rocket
 -> Launching from Earth
