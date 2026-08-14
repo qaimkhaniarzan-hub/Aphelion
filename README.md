@@ -6,7 +6,7 @@ Current features:
 -> Missions for credits
 -> Upgrades to buy with the credits
 <img width="804" height="418" alt="image" src="https://github.com/user-attachments/assets/74d0986f-6bd9-41f6-8f25-664b099a1abc" />
-
+ (by the way i used ai for a bit of the coding cuz im not that good an integrating random generation)
 Features I am currently working on:
 -> Scroll Zoom
 -> More lander models
